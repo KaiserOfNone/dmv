@@ -23,6 +23,7 @@ type Bot struct {
 	commands        []*discord.ApplicationCommand
 	cfg             Config
 	discordClient   *discord.Session
+	stop            chan bool
 }
 
 func NewBot(cfg Config, logger *log.Logger) (*Bot, error) {
@@ -35,6 +36,7 @@ func NewBot(cfg Config, logger *log.Logger) (*Bot, error) {
 		logger:          logger,
 		commandHandlers: map[string]CommandHandler{},
 		discordClient:   client,
+		stop:            make(chan bool),
 	}, nil
 }
 
@@ -50,11 +52,15 @@ func (b *Bot) Start() error {
 	if err != nil {
 		return err
 	}
-	return nil
+	select {
+	case <-b.stop:
+		return nil
+	}
 }
 
 func (b *Bot) Shutdown() error {
 	err := b.discordClient.Close()
+	b.stop <- true
 	return err
 }
 
