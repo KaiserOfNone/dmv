@@ -102,3 +102,21 @@ type CommandHandler = func(
 	s *discord.Session,
 	i *discord.InteractionCreate,
 	data discord.ApplicationCommandInteractionData)
+
+func ReplyEphemeral(s *discord.Session, i *discord.InteractionCreate, message string) {
+	s.InteractionRespond(i.Interaction, &discord.InteractionResponse{
+		Type: discord.InteractionResponseChannelMessageWithSource,
+		Data: &discord.InteractionResponseData{
+			Content: message,
+			Flags:   discord.MessageFlagsEphemeral,
+		},
+	})
+}
+
+func CollectOptions(opts []*discord.ApplicationCommandInteractionDataOption) map[string]*discord.ApplicationCommandInteractionDataOption {
+	rv := map[string]*discord.ApplicationCommandInteractionDataOption{}
+	for _, opt := range opts {
+		rv[opt.Name] = opt
+	}
+	return rv
+}
