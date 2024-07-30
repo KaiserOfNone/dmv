@@ -61,11 +61,13 @@ func (uc *UserConfigManager) ConfigureHandler(
 	s *discord.Session,
 	i *discord.InteractionCreate,
 	data discord.ApplicationCommandInteractionData) {
+
 	opts := bot.CollectOptions(data.Options)
+
 	if tzgroup, ok := opts["timezone"]; ok {
 		cmd := bot.CollectOptions(tzgroup.Options)
 		if setopts, ok := cmd["set"]; ok {
-			uc.ConfigureTimezoneHandler(s, i, setopts)
+			uc.SetTimezoneHandler(s, i, setopts)
 		}
 		if getopts, ok := cmd["get"]; ok {
 			uc.GetTimezoneHandler(s, i, getopts)
@@ -73,13 +75,15 @@ func (uc *UserConfigManager) ConfigureHandler(
 	}
 }
 
-func (uc *UserConfigManager) ConfigureTimezoneHandler(
+func (uc *UserConfigManager) SetTimezoneHandler(
 	s *discord.Session,
 	i *discord.InteractionCreate,
 	data *discord.ApplicationCommandInteractionDataOption) {
+
 	user := i.Interaction.Member.User.ID
 	opts := bot.CollectOptions(data.Options)
 	tzName := opts["timezone"].Value.(string)
+
 	location, err := time.LoadLocation(tzName)
 	if err != nil {
 		bot.ReplyEphemeral(s, i, fmt.Sprintf("Invalid location: %s: %v", location, err))
@@ -95,7 +99,9 @@ func (uc *UserConfigManager) GetTimezoneHandler(
 	s *discord.Session,
 	i *discord.InteractionCreate,
 	data *discord.ApplicationCommandInteractionDataOption) {
+
 	user := i.Interaction.Member.User.ID
+
 	userCfg, found := uc.UserConfigs[user]
 	if !found || userCfg.Timezone == nil {
 		bot.ReplyEphemeral(s, i, "You don't have a timezone set")

@@ -113,6 +113,15 @@ func ReplyEphemeral(s *discord.Session, i *discord.InteractionCreate, message st
 	})
 }
 
+func ReplyVisible(s *discord.Session, i *discord.InteractionCreate, message string) {
+	s.InteractionRespond(i.Interaction, &discord.InteractionResponse{
+		Type: discord.InteractionResponseChannelMessageWithSource,
+		Data: &discord.InteractionResponseData{
+			Content: message,
+		},
+	})
+}
+
 func CollectOptions(opts []*discord.ApplicationCommandInteractionDataOption) map[string]*discord.ApplicationCommandInteractionDataOption {
 	rv := map[string]*discord.ApplicationCommandInteractionDataOption{}
 	for _, opt := range opts {

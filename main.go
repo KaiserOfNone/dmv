@@ -44,12 +44,8 @@ func PongHandler(
 	s *discord.Session,
 	i *discord.InteractionCreate,
 	data discord.ApplicationCommandInteractionData) {
-	s.InteractionRespond(i.Interaction, &discord.InteractionResponse{
-		Type: discord.InteractionResponseChannelMessageWithSource,
-		Data: &discord.InteractionResponseData{
-			Content: "Pong!",
-		},
-	})
+
+	bot.ReplyVisible(s, i, "Pong!")
 }
 
 func main() {
