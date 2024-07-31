@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"time"
@@ -15,15 +16,52 @@ type UserConfig struct {
 
 type UserConfigManager struct {
 	logger      *log.Logger
+	db          *sql.DB
 	UserConfigs map[string]UserConfig
 }
 
-func LoadUserConfigs(logger *log.Logger) UserConfigManager {
-	return UserConfigManager{
-		logger:      logger,
-		UserConfigs: map[string]UserConfig{},
+func NewUserConfigManager(logger *log.Logger, db *sql.DB) (*UserConfigManager, error) {
+	err := db.Ping()
+	if err != nil {
+		return nil, err
 	}
+	return &UserConfigManager{
+		logger:      logger,
+		db:          db,
+		UserConfigs: map[string]UserConfig{},
+	}, nil
 }
+
+func (uc *UserConfigManager) UpdateUserConfig(tx *sql.Tx, user string, cfg UserConfig) error {
+	uc.UserConfigs[user] = cfg
+	_, err := tx.Exec("INSERT OR REPLACE INTO user_configs (id, timezone) VALUES (?, ?)", user, cfg.Timezone.String())
+	return err
+}
+
+func (uc *UserConfigManager) GetUserConfig(tx *sql.Tx, user string) (UserConfig, error) {
+	if cfg, ok := uc.UserConfigs[user]; ok {
+		return cfg, nil
+	}
+	var timezone string
+	err := tx.QueryRow("SELECT timezone FROM user_configs WHERE id = ?", user).Scan(&timezone)
+	if err == sql.ErrNoRows {
+		return UserConfig{}, nil
+	}
+	if err != nil {
+		return UserConfig{}, err
+	}
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		return UserConfig{}, err
+	}
+	cfg := UserConfig{
+		Timezone: loc,
+	}
+	uc.UserConfigs[user] = cfg
+	return cfg, nil
+}
+
+// Commands
 
 var ConfigureDescriptor = &discord.ApplicationCommand{
 	Name:        "configure",
@@ -89,9 +127,33 @@ func (uc *UserConfigManager) SetTimezoneHandler(
 		bot.ReplyEphemeral(s, i, fmt.Sprintf("Invalid location: %s: %v", location, err))
 		return
 	}
-	userConfig := uc.UserConfigs[user]
+	tx, err := uc.db.Begin()
+	if err != nil {
+		bot.ReplyEphemeral(s, i, "Internal error, please notify the bot owner.")
+		uc.logger.Printf("Failed to start transaction: %v", err)
+		return
+	}
+	userConfig, err := uc.GetUserConfig(tx, user)
+	if err != nil {
+		bot.ReplyEphemeral(s, i, "Internal error, please notify the bot owner.")
+		uc.logger.Printf("Failed to get user config: %v", err)
+		tx.Rollback()
+		return
+	}
 	userConfig.Timezone = location
-	uc.UserConfigs[user] = userConfig
+	err = uc.UpdateUserConfig(tx, user, userConfig)
+	if err != nil {
+		bot.ReplyEphemeral(s, i, "Internal error, please notify the bot owner.")
+		uc.logger.Printf("Failed to update user config: %v", err)
+		tx.Rollback()
+		return
+	}
+	err = tx.Commit()
+	if err != nil {
+		bot.ReplyEphemeral(s, i, "Internal error, please notify the bot owner.")
+		uc.logger.Printf("Failed to commit transaction: %v", err)
+		return
+	}
 	bot.ReplyEphemeral(s, i, fmt.Sprintf("Timezone set to %s", location.String()))
 }
 
@@ -101,9 +163,21 @@ func (uc *UserConfigManager) GetTimezoneHandler(
 	data *discord.ApplicationCommandInteractionDataOption) {
 
 	user := i.Interaction.Member.User.ID
-
-	userCfg, found := uc.UserConfigs[user]
-	if !found || userCfg.Timezone == nil {
+	tx, err := uc.db.Begin()
+	if err != nil {
+		bot.ReplyEphemeral(s, i, "Internal error, please notify the bot owner.")
+		uc.logger.Printf("Failed to start transaction: %v", err)
+		return
+	}
+	userCfg, err := uc.GetUserConfig(tx, user)
+	if err != nil {
+		bot.ReplyEphemeral(s, i, "Internal error, please notify the bot owner.")
+		uc.logger.Printf("Failed to get user config: %v", err)
+		tx.Rollback()
+		return
+	}
+	tx.Commit()
+	if userCfg.Timezone == nil {
 		bot.ReplyEphemeral(s, i, "You don't have a timezone set")
 		return
 	}

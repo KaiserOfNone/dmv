@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"io"
 	"log"
 	"os"
@@ -10,10 +11,12 @@ import (
 	"github.com/kaiserofnone/dmv/bot"
 
 	discord "github.com/bwmarrin/discordgo"
+	_ "github.com/mattn/go-sqlite3"
 	toml "github.com/pelletier/go-toml/v2"
 )
 
 type Config struct {
+	DBPath    string
 	BotConfig bot.Config `toml:"bot"`
 }
 
@@ -49,7 +52,7 @@ func PongHandler(
 }
 
 func main() {
-	logf, err := os.Create("bot.log")
+	logf, err := os.OpenFile("bot.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		panic("Failed to create log file")
 	}
@@ -62,7 +65,14 @@ func main() {
 	if err != nil {
 		logger.Fatalf("Failed to load config: %v", err)
 	}
-	userConfigs := LoadUserConfigs(logger)
+	db, err := sql.Open("sqlite3", cfg.DBPath)
+	if err != nil {
+		logger.Fatalf("Failed to open database: %v", err)
+	}
+	userConfigs, err := NewUserConfigManager(logger, db)
+	if err != nil {
+		logger.Fatalf("Failed to create user config manager: %v", err)
+	}
 	discordBot, err := bot.NewBot(cfg.BotConfig, logger)
 	discordBot.RegisterHandler(PongDescriptor, PongHandler)
 	discordBot.RegisterHandler(ConfigureDescriptor, userConfigs.ConfigureHandler)
